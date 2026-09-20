@@ -8,8 +8,9 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(() => ({
   plugins: [react()],
 
-  // Expose TYPESAFE_* variables (the API key the Jev SDK expects) to the
-  // webview bundle, alongside Vite's own VITE_ prefix.
+  // Expose non-secret TYPESAFE_* overrides (base URL, model) to the webview
+  // bundle, alongside Vite's own VITE_ prefix. TYPESAFE_API_KEY is not one of
+  // these: it stays server-side in src-tauri/src/api.rs and is never read here.
   envPrefix: ["VITE_", "TAURI_ENV_", "TYPESAFE_"],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`

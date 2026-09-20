@@ -35,6 +35,34 @@ const STRIPPED_HEADERS: [&str; 2] = ["content-encoding", "content-length"];
 
 static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
+static API_KEY: OnceLock<String> = OnceLock::new();
+
+/// Load `.env` from the repo root, next to `src-tauri`.
+///
+/// A missing file is fine — a real environment variable set on the host
+/// (the normal case in production) takes over instead.
+pub fn load_env() {
+    if let Some(root) = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).parent() {
+        let _ = dotenvy::from_path(root.join(".env"));
+    }
+}
+
+/// The key used to authenticate with the Jev API.
+///
+/// Read once from the environment. It never reaches the webview: the SDK
+/// running there is given a placeholder, and every real request gets its
+/// `Authorization` header attached here instead.
+fn api_key() -> Result<&'static str, String> {
+    let key = API_KEY.get_or_init(|| std::env::var("TYPESAFE_API_KEY").unwrap_or_default());
+    if key.is_empty() {
+        return Err(
+            "TYPESAFE_API_KEY is not set. Add it to .env (dev) or the host environment (production)."
+                .to_string(),
+        );
+    }
+    Ok(key.as_str())
+}
+
 /// The shared client. Cloning is cheap; the connection pool is what matters.
 fn client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| {
@@ -99,8 +127,14 @@ pub async fn api_request(request: ApiRequest) -> Result<ApiResponse, String> {
 
     let mut builder = client().request(method, &request.url);
     for (name, value) in &request.headers {
+        // The webview's SDK sets its own placeholder Authorization header;
+        // the real key is attached below instead of forwarded from the frontend.
+        if name.eq_ignore_ascii_case("authorization") {
+            continue;
+        }
         builder = builder.header(name, value);
     }
+    builder = builder.header("authorization", format!("Bearer {}", api_key()?));
     if let Some(body) = request.body {
         builder = builder.body(body);
     }

@@ -69,6 +69,8 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             tray::setup(app)?;
+            // Load TYPESAFE_API_KEY before anything might need it.
+            api::load_env();
             // Open the connection to the API now, not on the first paste.
             api::warm_up();
             Ok(())

@@ -29,6 +29,9 @@ reqwest = { version = "0.12", default-features = false, features = [
   "http2",
 ] }
 tokio = { version = "1", default-features = false, features = ["time"] }
+# Loads `TYPESAFE_API_KEY` from the repo-root `.env` in dev; production hosts
+# set the real environment variable instead.
+dotenvy = "0.15"
 
 # Desktop-only: global hotkey, active window lookup and synthetic keystrokes.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CLIPBOARD_POLL_INTERVAL_MS } from "../config";
 import { addToHistory, readClipboardText } from "../lib/clipboard";
+import { getActiveContext } from "../lib/commands";
 import type { ClipboardItem } from "../types";
 
 interface UseClipboardHistory {
@@ -19,6 +20,9 @@ export function useClipboardHistory(): UseClipboardHistory {
   const [history, setHistory] = useState<ClipboardItem[]>([]);
   // Guards against overlapping reads if a poll outlives its interval.
   const readingRef = useRef(false);
+  // Mirrors the most recent entry's text, so a genuinely new copy can be told
+  // apart from an unchanged clipboard without waiting on a state update.
+  const lastTextRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,9 +32,18 @@ export function useClipboardHistory(): UseClipboardHistory {
       readingRef.current = true;
       try {
         const text = await readClipboardText();
-        if (!cancelled && text) {
-          setHistory((current) => addToHistory(current, text));
-        }
+        if (cancelled || !text || text === lastTextRef.current) return;
+        lastTextRef.current = text;
+
+        // Only a genuinely new entry is worth the extra IPC round trip: this
+        // is what lets Jev later tell whether the freshest copy came from the
+        // window the user is now in.
+        const sourceApp = await getActiveContext()
+          .then((context) => context.appName)
+          .catch(() => undefined);
+        if (cancelled) return;
+
+        setHistory((current) => addToHistory(current, text, sourceApp));
       } finally {
         readingRef.current = false;
       }
@@ -45,7 +58,12 @@ export function useClipboardHistory(): UseClipboardHistory {
     };
   }, []);
 
-  const clear = useCallback(() => setHistory([]), []);
+  const clear = useCallback(() => {
+    setHistory([]);
+    // Otherwise an unchanged clipboard would look like "nothing new" forever
+    // and the cleared entry would never be picked back up.
+    lastTextRef.current = null;
+  }, []);
 
   return { history, clear };
 }

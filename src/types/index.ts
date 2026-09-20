@@ -6,6 +6,12 @@ export interface ClipboardItem {
   text: string;
   /** Epoch milliseconds at which the text was first seen. */
   capturedAt: number;
+  /**
+   * Application the text was copied from, when it could be read at capture
+   * time. `undefined` when the active window lookup failed, not when it
+   * legitimately has no name.
+   */
+  sourceApp?: string;
 }
 
 /** The window the user was working in before the overlay took focus. */
@@ -25,6 +31,16 @@ export interface ActiveContext {
 export type SmartPasteState = {
   activeTitle: string;
   activeApp: string;
+  /**
+   * Whether the most recently copied entry came from the same app the user is
+   * pasting into. A strong "still mid-workflow, this is probably it" cue that
+   * per-entry criteria can't express on their own. `null` when the source
+   * app of the newest entry is unknown.
+   */
+  latestEntryFromActiveApp: boolean | null;
+  /** How many candidates Jev is choosing between, out of the full history. */
+  candidateCount: number;
+  totalHistoryCount: number;
 };
 
 /** Jev's verdict about which history entry fits the active context. */

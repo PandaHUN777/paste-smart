@@ -7,7 +7,7 @@ import {
   MIN_CHOICE_CONFIDENCE,
   MIN_RELEVANCE,
 } from "../config";
-import { previewOf } from "../lib/clipboard";
+import { previewOf, relativeAgeOf } from "../lib/clipboard";
 import { pooledFetch } from "../lib/http";
 import type { ActiveContext, ClipboardItem, SmartPasteState, Suggestion } from "../types";
 
@@ -20,23 +20,22 @@ export class JevUnavailableError extends Error {}
 let client: TypeSafeClient | null = null;
 
 /**
- * Lazily construct the shared client.
+ * Placeholder handed to the SDK so it will construct requests at all.
  *
- * The key comes from `TYPESAFE_API_KEY`; it is inlined at build time because
- * the SDK runs inside the webview. Never commit a populated `.env`.
+ * The real `TYPESAFE_API_KEY` lives only in the Rust process now (see
+ * `src-tauri/src/api.rs`) — `pooledFetch` routes every request through
+ * `invoke("api_request", ...)`, which discards whatever `Authorization`
+ * header the SDK sets here and attaches the real key server-side. This value
+ * is never sent anywhere; it only satisfies the SDK's "no key configured" check.
  */
+const PLACEHOLDER_API_KEY = "smart-paste-key-is-attached-in-rust";
+
+/** Lazily construct the shared client. */
 function getClient(): TypeSafeClient {
   if (client) return client;
 
-  const apiKey = import.meta.env.TYPESAFE_API_KEY;
-  if (!apiKey) {
-    throw new JevUnavailableError(
-      "TYPESAFE_API_KEY is not set. Add it to your environment or .env file and rebuild.",
-    );
-  }
-
   client = new TypeSafeClient({
-    apiKey,
+    apiKey: PLACEHOLDER_API_KEY,
     baseURL: import.meta.env.TYPESAFE_BASE_URL,
     defaultModel: import.meta.env.TYPESAFE_DEFAULT_MODEL ?? MODEL,
     // The SDK guards against browser use; the webview is a trusted local shell.
@@ -65,20 +64,41 @@ function candidatesOf(history: ClipboardItem[]): ClipboardItem[] {
   return history.slice(0, JEV_CANDIDATE_LIMIT);
 }
 
-/** Describe each entry to Jev, keyed by a label we can map back to an item. */
-function buildCriteria(candidates: ClipboardItem[]): ChoiceCriteria {
+/**
+ * Describe each entry to Jev, keyed by a label we can map back to an item.
+ *
+ * Content alone drops a strong signal: "what did the user just copy" is
+ * largely a recency question, and a bare `entry_0` label carries no meaning
+ * of its own. Each candidate is described as an object instead of a plain
+ * string so both the text and how long ago it was copied reach the model.
+ */
+function buildCriteria(candidates: ClipboardItem[], now: number): ChoiceCriteria {
   const criteria: ChoiceCriteria = {
     [NONE_LABEL]: "None of the entries suit this window, or the history is irrelevant here.",
   };
   candidates.forEach((item, index) => {
-    criteria[labelFor(index)] = previewOf(item.text, JEV_PREVIEW_LENGTH);
+    criteria[labelFor(index)] = {
+      content: previewOf(item.text, JEV_PREVIEW_LENGTH),
+      copied: relativeAgeOf(item.capturedAt, now),
+    };
   });
   return criteria;
 }
 
-/** Shape the window context into the request state. */
-export function buildState(context: ActiveContext): SmartPasteState {
-  return { activeTitle: context.title, activeApp: context.appName };
+/** Shape the window context and history into the request state. */
+export function buildState(
+  context: ActiveContext,
+  candidates: ClipboardItem[],
+  totalHistoryCount: number,
+): SmartPasteState {
+  const newest = candidates[0];
+  return {
+    activeTitle: context.title,
+    activeApp: context.appName,
+    latestEntryFromActiveApp: newest?.sourceApp ? newest.sourceApp === context.appName : null,
+    candidateCount: candidates.length,
+    totalHistoryCount,
+  };
 }
 
 /** The most likely real entry, used to seed the picker when Jev says "none". */
@@ -112,14 +132,14 @@ export async function selectBestItem(
   const questions = {
     best: choice(
       "Which clipboard entry should be pasted into the active window right now?",
-      buildCriteria(candidates),
+      buildCriteria(candidates, Date.now()),
     ),
   };
 
   let answers;
   try {
     ({ answers } = await getClient().systemOne(
-      { state: buildState(context), questions, model: MODEL },
+      { state: buildState(context, candidates, history.length), questions, model: MODEL },
       { signal },
     ));
   } catch (error) {
