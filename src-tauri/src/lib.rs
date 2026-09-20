@@ -6,6 +6,7 @@ use enigo::{Direction, Enigo, Key, Keyboard, Settings};
 use serde::Serialize;
 use tauri::AppHandle;
 
+mod api;
 mod tray;
 
 /// Milliseconds to wait before synthesizing the paste, so the OS has time to
@@ -30,9 +31,16 @@ fn get_active_context() -> Result<ActiveContext, String> {
         .map_err(|_| "Failed to read the active window".to_string())
 }
 
+/// Synthesize Ctrl+V in whichever window currently holds focus.
+///
+/// `restore_focus` is set only when the overlay was on screen and has just
+/// been hidden. On the silent hotkey path nothing ever took focus away from
+/// the target window, so waiting would be pure latency.
 #[tauri::command]
-fn simulate_paste() -> Result<(), String> {
-    thread::sleep(Duration::from_millis(FOCUS_RESTORE_DELAY_MS));
+fn simulate_paste(restore_focus: bool) -> Result<(), String> {
+    if restore_focus {
+        thread::sleep(Duration::from_millis(FOCUS_RESTORE_DELAY_MS));
+    }
 
     let mut enigo = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
     enigo
@@ -58,16 +66,18 @@ fn set_tray_status(app: AppHandle, items: usize) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             tray::setup(app)?;
+            // Open the connection to the API now, not on the first paste.
+            api::warm_up();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_active_context,
             simulate_paste,
-            set_tray_status
+            set_tray_status,
+            api::api_request
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

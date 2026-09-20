@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { OVERLAY_SHORTCUT } from "../config";
-import { getActiveContext } from "../lib/commands";
 import { onShowOverlayRequested } from "../lib/events";
 import { hideOverlay, onOverlayFocusChanged, showOverlay } from "../lib/overlayWindow";
 import type { ActiveContext } from "../types";
+import { useActiveContext } from "./useActiveContext";
 import { useGlobalShortcut } from "./useGlobalShortcut";
 
 interface UseOverlay {
@@ -26,17 +26,20 @@ interface UseOverlay {
 /**
  * Own the overlay window's lifecycle.
  *
- * The hotkey deliberately does *not* show the window: it records the target
- * window and starts a session, leaving the overlay hidden so a confident
- * Smart Paste never interrupts the user. The window is only revealed when the
- * app asks for it, or when the tray is used to browse history.
+ * The hotkey deliberately does *not* show the window: it starts a session and
+ * leaves the overlay hidden so a confident Smart Paste never interrupts the
+ * user. The window is only revealed when the app asks for it, or when the tray
+ * is used to browse history.
  */
 export function useOverlay(): UseOverlay {
   const [isVisible, setIsVisible] = useState(false);
-  const [context, setContext] = useState<ActiveContext | null>(null);
   const [sessionId, setSessionId] = useState(0);
   // Focus events also fire while hidden; the ref keeps the handler cheap and current.
   const isVisibleRef = useRef(false);
+
+  // Sampled continuously rather than on keypress, so the hotkey starts work
+  // immediately instead of waiting on a round trip to Rust.
+  const context = useActiveContext(isVisible);
 
   useEffect(() => {
     isVisibleRef.current = isVisible;
@@ -52,31 +55,19 @@ export function useOverlay(): UseOverlay {
     await showOverlay();
   }, []);
 
-  /** Read the window the paste is destined for, before anything steals focus. */
-  const captureContext = useCallback(async (): Promise<void> => {
-    try {
-      setContext(await getActiveContext());
-    } catch (error) {
-      console.error("Failed to read the active window:", error);
-      setContext(null);
-    }
-  }, []);
-
-  // Hotkey: capture the target and start a session, staying invisible.
+  // Hotkey: start a session without showing anything.
   useGlobalShortcut(OVERLAY_SHORTCUT, () => {
-    void captureContext().then(() => setSessionId((current) => current + 1));
+    setSessionId((current) => current + 1);
   });
 
   // The tray opens the history picker instead, without asking Jev anything.
   useEffect(() => {
-    const unlisten = onShowOverlayRequested(() => {
-      void captureContext().then(() => reveal());
-    });
+    const unlisten = onShowOverlayRequested(() => void reveal());
 
     return () => {
       void unlisten.then((stop) => stop());
     };
-  }, [captureContext, reveal]);
+  }, [reveal]);
 
   useEffect(() => {
     const unlisten = onOverlayFocusChanged((focused) => {

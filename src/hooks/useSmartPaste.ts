@@ -9,6 +9,8 @@ interface UseSmartPasteOptions {
   history: ClipboardItem[];
   /** Window the overlay was summoned from, or `null` when unknown. */
   context: ActiveContext | null;
+  /** Whether the overlay is on screen, which decides if focus must be restored. */
+  isVisible: boolean;
   /** Hides the overlay; awaited before the keystroke is synthesized. */
   hide: () => Promise<void>;
   /**
@@ -39,6 +41,7 @@ const describeError = (error: unknown): string =>
 export function useSmartPaste({
   history,
   context,
+  isVisible,
   hide,
   reveal,
 }: UseSmartPasteOptions): UseSmartPaste {
@@ -63,7 +66,7 @@ export function useSmartPaste({
       setStatus("pasting");
       setError(null);
       try {
-        await pasteText(item.text, hide);
+        await pasteText(item.text, hide, isVisible);
         setStatus("done");
       } catch (caught) {
         setStatus("error");
@@ -71,7 +74,7 @@ export function useSmartPaste({
         await reveal();
       }
     },
-    [hide, reveal],
+    [hide, isVisible, reveal],
   );
 
   const run = useCallback(async (): Promise<void> => {

@@ -14,18 +14,15 @@ export interface ActiveContext {
   appName: string;
 }
 
-/** A history entry as Jev sees it: a label and a trimmed preview. */
-export type HistoryEntry = {
-  id: string;
-  text: string;
-};
-
 /**
- * The state handed to Jev when asking it to pick an entry. Declared as object
- * type aliases so it stays assignable to the SDK's JSON state type.
+ * The state handed to Jev when asking it to pick an entry.
+ *
+ * The candidate entries are not repeated here: they are already the choice
+ * question's criteria, and sending them twice doubled the input tokens for no
+ * extra signal. Declared as an object type alias so it stays assignable to the
+ * SDK's JSON state type.
  */
 export type SmartPasteState = {
-  history: HistoryEntry[];
   activeTitle: string;
   activeApp: string;
 };

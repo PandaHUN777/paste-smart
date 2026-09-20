@@ -8,9 +8,12 @@ export function getActiveContext(): Promise<ActiveContext> {
 }
 
 /**
- * Synthesize Ctrl+V in whichever window holds focus. The Rust side waits
- * briefly first, so hide the overlay before calling this.
+ * Synthesize Ctrl+V in whichever window holds focus.
+ *
+ * @param restoreFocus - Pass `true` only when the overlay was just hidden, so
+ * Rust waits for the OS to hand focus back. On the silent hotkey path nothing
+ * took focus in the first place and the wait would be wasted latency.
  */
-export function simulatePaste(): Promise<void> {
-  return invoke<void>("simulate_paste");
+export function simulatePaste(restoreFocus: boolean): Promise<void> {
+  return invoke<void>("simulate_paste", { restoreFocus });
 }

@@ -1,9 +1,14 @@
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import { TypeSafeClient, choice, noul } from "@typesafe-ai/sdk";
-import type { ChoiceCriteria, Fetch } from "@typesafe-ai/sdk";
+import { TypeSafeClient, choice } from "@typesafe-ai/sdk";
+import type { ChoiceCriteria } from "@typesafe-ai/sdk";
 
-import { MIN_CHOICE_CONFIDENCE, MIN_RELEVANCE } from "../config";
+import {
+  JEV_CANDIDATE_LIMIT,
+  JEV_PREVIEW_LENGTH,
+  MIN_CHOICE_CONFIDENCE,
+  MIN_RELEVANCE,
+} from "../config";
 import { previewOf } from "../lib/clipboard";
+import { pooledFetch } from "../lib/http";
 import type { ActiveContext, ClipboardItem, SmartPasteState, Suggestion } from "../types";
 
 /** Model used to answer Smart Paste questions. */
@@ -37,8 +42,8 @@ function getClient(): TypeSafeClient {
     // The SDK guards against browser use; the webview is a trusted local shell.
     dangerouslyAllowBrowser: true,
     // The API rejects browser origins ("Disallowed CORS origin"), so the
-    // request is made from Rust instead of the webview.
-    fetch: tauriFetch as Fetch,
+    // request is made from Rust — over a connection that stays warm.
+    fetch: pooledFetch,
   });
   return client;
 }
@@ -46,25 +51,44 @@ function getClient(): TypeSafeClient {
 /** Label used for the nth history entry in the choice question. */
 const labelFor = (index: number): string => `entry_${index}`;
 
+/**
+ * Label meaning "nothing here fits".
+ *
+ * This used to be a separate `noul` question. Folding it into the choice costs
+ * one extra label instead of a second inference, and the probability mass on
+ * it is the same relevance signal we were asking for.
+ */
+const NONE_LABEL = "none";
+
+/** The entries Jev is offered: the most recent few, trimmed short. */
+function candidatesOf(history: ClipboardItem[]): ClipboardItem[] {
+  return history.slice(0, JEV_CANDIDATE_LIMIT);
+}
+
 /** Describe each entry to Jev, keyed by a label we can map back to an item. */
-function buildCriteria(history: ClipboardItem[]): ChoiceCriteria {
-  const criteria: ChoiceCriteria = {};
-  history.forEach((item, index) => {
-    criteria[labelFor(index)] = previewOf(item.text);
+function buildCriteria(candidates: ClipboardItem[]): ChoiceCriteria {
+  const criteria: ChoiceCriteria = {
+    [NONE_LABEL]: "None of the entries suit this window, or the history is irrelevant here.",
+  };
+  candidates.forEach((item, index) => {
+    criteria[labelFor(index)] = previewOf(item.text, JEV_PREVIEW_LENGTH);
   });
   return criteria;
 }
 
-/** Shape the clipboard history and window context into the request state. */
-export function buildState(history: ClipboardItem[], context: ActiveContext): SmartPasteState {
-  return {
-    history: history.map((item, index) => ({
-      id: labelFor(index),
-      text: previewOf(item.text),
-    })),
-    activeTitle: context.title,
-    activeApp: context.appName,
-  };
+/** Shape the window context into the request state. */
+export function buildState(context: ActiveContext): SmartPasteState {
+  return { activeTitle: context.title, activeApp: context.appName };
+}
+
+/** The most likely real entry, used to seed the picker when Jev says "none". */
+function likeliestEntry(probabilities: Readonly<Record<string, number>>): string | null {
+  let best: string | null = null;
+  for (const [label, probability] of Object.entries(probabilities)) {
+    if (label === NONE_LABEL) continue;
+    if (best === null || probability > (probabilities[best] ?? 0)) best = label;
+  }
+  return best;
 }
 
 /**
@@ -80,25 +104,22 @@ export async function selectBestItem(
   context: ActiveContext,
   signal?: AbortSignal,
 ): Promise<Suggestion> {
-  if (history.length === 0) {
+  const candidates = candidatesOf(history);
+  if (candidates.length === 0) {
     throw new JevUnavailableError("Clipboard history is empty.");
   }
 
   const questions = {
     best: choice(
       "Which clipboard entry should be pasted into the active window right now?",
-      buildCriteria(history),
+      buildCriteria(candidates),
     ),
-    relevant: noul("Does the selected clipboard entry clearly suit the active window?", {
-      true: "The entry is the kind of text this window and application expect.",
-      false: "The entry is unrelated, or nothing in the history fits.",
-    }),
   };
 
   let answers;
   try {
     ({ answers } = await getClient().systemOne(
-      { state: buildState(history, context), questions, model: MODEL },
+      { state: buildState(context), questions, model: MODEL },
       { signal },
     ));
   } catch (error) {
@@ -106,19 +127,25 @@ export async function selectBestItem(
     throw new JevUnavailableError(error instanceof Error ? error.message : "Jev request failed.");
   }
 
-  const index = history.findIndex((_, position) => labelFor(position) === answers.best.choice);
-  const item = history[index];
+  const { choice: picked, confidence, probabilities } = answers.best;
+  const fitsNothing = picked === NONE_LABEL;
+  // When Jev declines, still surface its best real guess so the picker opens
+  // with something highlighted rather than nothing.
+  const label = fitsNothing ? likeliestEntry(probabilities) : picked;
+
+  const index = candidates.findIndex((_, position) => labelFor(position) === label);
+  const item = candidates[index];
   if (!item) {
-    throw new JevUnavailableError(`Jev returned an unknown entry: ${answers.best.choice}`);
+    throw new JevUnavailableError(`Jev returned an unknown entry: ${picked}`);
   }
 
-  const confidence = answers.best.confidence;
-  const relevance = answers.relevant.noul;
+  // Probability mass left over after "none" is how well the pick suits the window.
+  const relevance = 1 - (probabilities[NONE_LABEL] ?? 0);
 
   return {
     item,
     confidence,
     relevance,
-    isConfident: confidence >= MIN_CHOICE_CONFIDENCE && relevance >= MIN_RELEVANCE,
+    isConfident: !fitsNothing && confidence >= MIN_CHOICE_CONFIDENCE && relevance >= MIN_RELEVANCE,
   };
 }

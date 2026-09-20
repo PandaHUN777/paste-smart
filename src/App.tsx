@@ -18,6 +18,7 @@ function App() {
   const { status, error, suggestion, run, paste, reset } = useSmartPaste({
     history,
     context,
+    isVisible,
     hide: close,
     reveal,
   });
