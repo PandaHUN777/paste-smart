@@ -1,35 +1,59 @@
-import { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { readText } from "@tauri-apps/plugin-clipboard-manager";
+import { useCallback, useEffect } from "react";
+
+import { HistoryList } from "./components/HistoryList";
+import { Overlay } from "./components/Overlay";
+import { SmartPasteButton } from "./components/SmartPasteButton";
+import { StatusBar } from "./components/StatusBar";
+import { useAutoSmartPaste } from "./hooks/useAutoSmartPaste";
+import { useClipboardHistory } from "./hooks/useClipboardHistory";
+import { useEscapeKey } from "./hooks/useEscapeKey";
+import { useOverlay } from "./hooks/useOverlay";
+import { useSmartPaste } from "./hooks/useSmartPaste";
+import { useTrayStatus } from "./hooks/useTrayStatus";
 import "./App.css";
 
 function App() {
-  const [info, setInfo] = useState("Loading...");
+  const { history } = useClipboardHistory();
+  const { isVisible, sessionId, context, reveal, close } = useOverlay();
+  const { status, error, suggestion, run, paste, reset } = useSmartPaste({
+    history,
+    context,
+    hide: close,
+    reveal,
+  });
 
+  // Abort any in-flight request when the overlay is dismissed. Resetting on
+  // reveal would wipe the very suggestion the user was asked to confirm; each
+  // session already clears its own state when it starts.
   useEffect(() => {
-    async function test() {
-      try {
-        // Test 1: custom command
-        const [title, app] = await invoke<[string, string]>("get_active_context");
+    if (!isVisible) reset();
+  }, [isVisible, reset]);
 
-        // Test 2: clipboard plugin
-        const clipboard = await readText();
+  // The hotkey runs Smart Paste without showing anything; the overlay only
+  // appears if Jev is unsure or the request fails.
+  useAutoSmartPaste(sessionId, run);
 
-        setInfo(`Active window: ${title} (${app})\nClipboard: ${clipboard || "(empty)"}`);
-      } catch (err) {
-        setInfo("Error: " + String(err));
-        console.error(err);
-      }
-    }
+  useEscapeKey(isVisible, () => void close());
+  useTrayStatus(history.length);
 
-    test();
-  }, []);
+  const isBusy = status === "thinking" || status === "pasting";
+
+  const handleClose = useCallback(() => void close(), [close]);
 
   return (
-    <div style={{ padding: 20, fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
-      <h2>Tauri Test</h2>
-      {info}
-    </div>
+    <Overlay context={context} onClose={handleClose}>
+      <SmartPasteButton
+        disabled={isBusy || history.length === 0}
+        isBusy={isBusy}
+        onClick={() => void run()}
+      />
+      <StatusBar status={status} error={error} suggestion={suggestion} itemCount={history.length} />
+      <HistoryList
+        items={history}
+        suggestedId={suggestion?.item.id ?? null}
+        onSelect={(item) => void paste(item)}
+      />
+    </Overlay>
   );
 }
 
