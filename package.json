@@ -11,7 +11,6 @@
     "tauri": "tauri",
     "check:repo": "bun scripts/check-repo.mjs",
     "fix": "bun run lint:fix && bun run format",
-    "verify": "bun run check:repo && bunx tsc --noEmit && bun run lint && bun run format:check && cargo clippy --manifest-path src-tauri/Cargo.toml",
     "preflight": "bun run fix && bun run check:repo && bunx tsc --noEmit && bun run lint && bun run format:check",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",

@@ -11,6 +11,7 @@ on:
 jobs:
   lint-and-build:
     runs-on: windows-latest
+    environment: Production
 
     steps:
       - uses: actions/checkout@v6
@@ -49,6 +50,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Repo invariant check
+        run: bun run check:repo
 
       - name: Lint check
         run: bun run lint

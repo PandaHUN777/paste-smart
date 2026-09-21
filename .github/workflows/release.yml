@@ -42,6 +42,7 @@ jobs:
     needs: check-version
     if: needs.check-version.outputs.version-changed == 'true'
     runs-on: windows-latest
+    environment: Production
 
     steps:
       - uses: actions/checkout@v6
@@ -60,32 +61,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
-
-      - name: Validate release inputs
-        shell: bash
-        env:
-          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
-          RELEASE_VERSION: ${{ needs.check-version.outputs.version }}
-        run: |
-          set -euo pipefail
-
-          PACKAGE_VERSION=$(jq -r '.version' package.json)
-          TAURI_VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
-          CARGO_VERSION=$(awk -F '"' '/^version = / { print $2; exit }' src-tauri/Cargo.toml)
-
-          if [ "$RELEASE_VERSION" != "$PACKAGE_VERSION" ] || [ "$RELEASE_VERSION" != "$TAURI_VERSION" ] || [ "$RELEASE_VERSION" != "$CARGO_VERSION" ]; then
-            echo "Version mismatch:"
-            echo "  workflow: $RELEASE_VERSION"
-            echo "  package.json: $PACKAGE_VERSION"
-            echo "  src-tauri/tauri.conf.json: $TAURI_VERSION"
-            echo "  src-tauri/Cargo.toml: $CARGO_VERSION"
-            exit 1
-          fi
-
-          if [ -z "$TYPESAFE_API_KEY" ]; then
-            echo "TYPESAFE_API_KEY is not configured in repository secrets."
-            exit 1
-          fi
 
       - name: Cache Rust
         uses: actions/cache@v6
@@ -106,6 +81,20 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Validate release inputs
+        shell: bash
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          bun run check:repo
+
+          if [ -z "$TYPESAFE_API_KEY" ]; then
+            echo "TYPESAFE_API_KEY is not configured in repository secrets."
+            exit 1
+          fi
 
       - name: Build Tauri app
         env:

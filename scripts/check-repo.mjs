@@ -39,7 +39,6 @@ if (versionValues.some((version) => version !== versionValues[0])) {
 const requiredScripts = [
   "check:repo",
   "fix",
-  "verify",
   "preflight",
   "lint",
   "lint:fix",
