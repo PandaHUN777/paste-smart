@@ -37,7 +37,7 @@ decisions exist purely to protect this, and they are easy to undo by accident.
 | Frontend | React 19 + TypeScript (strict), Vite 8                      |
 | Package  | **bun** (`bun.lock` — do not introduce npm/yarn/pnpm files) |
 | AI       | `@typesafe-ai/sdk` 0.6, model `jev-latest`                  |
-| Lint     | oxlint (`correctness` = error), prettier, husky+lint-staged |
+| Lint     | oxlint (`correctness` = error), prettier, and Husky pre-commit checks |
 
 ## Commands
 

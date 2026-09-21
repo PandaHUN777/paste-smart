@@ -9,21 +9,15 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "preflight": "bun run lint:fix && bun run format",
+    "check:repo": "bun scripts/check-repo.mjs",
+    "fix": "bun run lint:fix && bun run format",
+    "verify": "bun run check:repo && bunx tsc --noEmit && bun run lint && bun run format:check && cargo clippy --manifest-path src-tauri/Cargo.toml",
+    "preflight": "bun run fix && bun run check:repo && bunx tsc --noEmit && bun run lint && bun run format:check",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky"
-  },
-  "lint-staged": {
-    "*.{ts,tsx,js,jsx}": [
-      "oxlint --fix",
-      "prettier --write"
-    ],
-    "*.{json,css,md,html}": [
-      "prettier --write"
-    ]
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -39,7 +33,6 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",
     "husky": "^9.1.7",
-    "lint-staged": "^17.5.1",
     "oxlint": "^1.83.0",
     "prettier": "^3.9.8",
     "typescript": "~6.0.3",
