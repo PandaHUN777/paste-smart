@@ -60,10 +60,18 @@ jobs:
       - name: Format check
         run: bun run format:check
 
-      - name: Build (debug)
-        run: bun run build
+      - name: Type check
+        run: bunx tsc --noEmit
 
       - name: Build Tauri app
         env:
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
         run: bun run tauri build
+
+      - name: Upload release artifacts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-installers
+          path: src-tauri/target/release/bundle
+          retention-days: 7

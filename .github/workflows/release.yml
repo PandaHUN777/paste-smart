@@ -1,15 +1,19 @@
 name: Release Windows Installer
 
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches:
       - main
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   check-version:
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
       version-changed: ${{ steps.check.outputs.version-changed }}
@@ -17,6 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Check if version changed
@@ -38,68 +43,19 @@ jobs:
             echo "version-changed=true" >> $GITHUB_OUTPUT
           fi
 
-  build-and-release:
+  publish-release:
     needs: check-version
     if: needs.check-version.outputs.version-changed == 'true'
-    runs-on: windows-latest
-    environment: Production
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      - name: Download build artifacts from CI
+        uses: actions/download-artifact@v4
         with:
-          node-version: "24"
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
-
-      - name: Cache Rust
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-
-      - name: Cache Bun
-        uses: actions/cache@v6
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Validate release inputs
-        shell: bash
-        env:
-          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
-        run: |
-          set -euo pipefail
-
-          bun run check:repo
-
-          if [ -z "$TYPESAFE_API_KEY" ]; then
-            echo "TYPESAFE_API_KEY is not configured in repository secrets."
-            exit 1
-          fi
-
-      - name: Build Tauri app
-        env:
-          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
-        run: bun run tauri build
+          name: tauri-installers
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: dist
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -109,7 +65,7 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
+            dist/msi/*.msi
+            dist/nsis/*.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
