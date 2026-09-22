@@ -1,6 +1,6 @@
 [package]
 name = "paste-smart"
-version = "0.1.5"
+version = "0.1.6"
 description = "Smart Paste — clipboard history overlay with AI-assisted selection"
 authors = ["theprinceraj"]
 edition = "2021"
