@@ -7,6 +7,7 @@ use serde::Serialize;
 use tauri::AppHandle;
 
 mod api;
+mod settings_window;
 mod tray;
 
 /// Milliseconds to wait before synthesizing the paste, so the OS has time to
@@ -69,17 +70,23 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             tray::setup(app)?;
-            // Load TYPESAFE_API_KEY before anything might need it.
-            api::load_env();
+            // Load the user's saved API key, if any, before anything might need it.
+            api::load_api_key(app.handle());
             // Open the connection to the API now, not on the first paste.
             api::warm_up();
+            // Build the Settings window hidden now, so its first-ever appearance
+            // later isn't a blank rectangle while WebView2 spins up.
+            settings_window::preload(app.handle())?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_active_context,
             simulate_paste,
             set_tray_status,
-            api::api_request
+            api::api_request,
+            api::has_api_key,
+            api::set_api_key,
+            settings_window::open_settings_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
