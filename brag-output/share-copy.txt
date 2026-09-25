@@ -1,0 +1,1 @@
+Ctrl+V pastes whatever you copied last. Smart Paste's Ctrl+Shift+V reads the window you're in and pastes what belongs there: your email on a sign-in page, the git command in a terminal. It takes about half a second and shows no window when it's sure. If nothing fits, it asks instead of guessing. Open source, Windows: github.com/theprinceraj/paste-smart
