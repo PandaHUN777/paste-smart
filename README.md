@@ -25,6 +25,7 @@ Plain `Ctrl+V` would have pasted the link every time.
 - No window at all when the answer is clear.
 - A history picker when the answer isn't clear, or when you want to choose.
 - Runs quietly in the system tray.
+- Can optionally start with Windows from Settings.
 - Fast: a smart paste usually takes around half a second.
 
 ## Install
@@ -41,6 +42,7 @@ your own TypeSafe API key.
 1. Start Smart Paste. It lives in the system tray.
 2. Click the tray icon and choose **Settings…**
 3. Paste your API key and save.
+4. Optionally enable **Start Smart Paste when Windows starts** in the same window.
 
 Your key is stored on your computer only. Without a key, the app still works as
 a simple clipboard history picker.

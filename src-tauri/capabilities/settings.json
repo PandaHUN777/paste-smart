@@ -3,5 +3,11 @@
   "identifier": "settings",
   "description": "Capability for the Settings window",
   "windows": ["settings"],
-  "permissions": ["core:default", "core:window:allow-hide"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-hide",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled"
+  ]
 }

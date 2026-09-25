@@ -207,10 +207,57 @@ body {
   background: var(--surface-hover);
 }
 
+.settings__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings__section--startup {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.settings__section-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .settings__hint {
   color: var(--muted);
   font-size: 13px;
   margin: 0;
+}
+
+.settings__startup {
+  align-items: flex-start;
+  cursor: pointer;
+  display: flex;
+  gap: 9px;
+}
+
+.settings__startup input {
+  accent-color: var(--accent);
+  margin: 2px 0 0;
+}
+
+.settings__startup input:disabled {
+  cursor: wait;
+}
+
+.settings__startup-title,
+.settings__startup-hint {
+  display: block;
+}
+
+.settings__startup-title {
+  font-size: 13px;
+}
+
+.settings__startup-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
 }
 
 .settings__form {

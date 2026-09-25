@@ -69,7 +69,7 @@ cd src-tauri && cargo clippy   # Rust lints
 
 | File                 | Responsibility                                                           |
 | -------------------- | ------------------------------------------------------------------------ |
-| `lib.rs`             | Plugin/tray wiring, `get_active_context`, `simulate_paste`, tray status  |
+| `lib.rs`             | Plugin/tray wiring (including autostart), paste simulation, tray status |
 | `api.rs`             | **Pooled HTTP client for the Jev API**, user API key storage — see below |
 | `settings_window.rs` | Opens/focuses the Settings window                                        |
 | `tray.rs`            | Tray icon, menu, tooltip status, `smart-paste://show-overlay` event      |
@@ -93,7 +93,7 @@ config.ts     every tunable constant. Do not scatter magic numbers.
 
 `App.tsx` wires hooks together and renders. It holds no logic of its own.
 
-`Settings.tsx` is a second root component (the API key entry form) rendered
+`Settings.tsx` is a second root component (API key and Windows startup settings) rendered
 instead of `App.tsx` when the Settings window loads — `main.tsx` branches on
 `window.location.hash === "#settings"` since both windows share one Vite
 bundle. No router; don't add one for two screens.
@@ -190,8 +190,9 @@ instead of a whole second inference.
 are ACL-checked per window. A capability's `"windows"` array must list every
 window label that needs it: `default.json` covers `"main"` (the overlay) only,
 so the Settings window has its own `settings.json` capability
-(`"windows": ["settings"]`) granting just `core:window:allow-close`. Forgetting
-this means the new window's close/show/focus calls fail silently. Non-obvious
+(`"windows": ["settings"]`) granting `core:window:allow-hide` plus the minimal
+`autostart:allow-*` permissions used by its startup toggle. Forgetting these
+means the window or startup controls fail at runtime. Non-obvious
 too: `core:window:default` does **not** include `allow-start-dragging` — it's
 listed explicitly on `default.json` so `data-tauri-drag-region` works.
 Platform-gated permissions (global-shortcut) live in `desktop.json`.

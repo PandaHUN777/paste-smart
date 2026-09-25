@@ -28,6 +28,16 @@ export function setApiKey(key: string): Promise<void> {
   return invoke<void>("set_api_key", { key });
 }
 
+/** Whether Smart Paste is registered to start with Windows. */
+export function isAutostartEnabled(): Promise<boolean> {
+  return invoke<boolean>("plugin:autostart|is_enabled");
+}
+
+/** Register or remove Smart Paste from Windows startup. */
+export function setAutostartEnabled(enabled: boolean): Promise<void> {
+  return invoke<void>(enabled ? "plugin:autostart|enable" : "plugin:autostart|disable");
+}
+
 /** Open the Settings window, or focus it if it's already open. */
 export function openSettingsWindow(): Promise<void> {
   return invoke<void>("open_settings_window");
