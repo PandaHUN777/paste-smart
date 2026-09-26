@@ -39,8 +39,17 @@ function Settings() {
 
   useEffect(() => {
     void hasApiKey().then(setAlreadyConfigured);
-    void refreshAutostart();
-  }, [refreshAutostart]);
+    void isEnabled()
+      .then((enabled) => {
+        setStartOnStartup(enabled);
+        setAutostartState("idle");
+        setAutostartError(null);
+      })
+      .catch((caught) => {
+        setAutostartState("error");
+        setAutostartError(describeAutostartError(caught));
+      });
+  }, []);
 
   // The window is preloaded once and reused (hidden, not destroyed) rather
   // than rebuilt on every open — see `settings_window.rs::preload` — so its
