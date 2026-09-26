@@ -26,11 +26,11 @@ function Settings() {
   const [autostartError, setAutostartError] = useState<string | null>(null);
 
   const refreshAutostart = useCallback(async () => {
-    setAutostartState("loading");
-    setAutostartError(null);
     try {
-      setStartOnStartup(await isEnabled());
+      const enabled = await isEnabled();
+      setStartOnStartup(enabled);
       setAutostartState("idle");
+      setAutostartError(null);
     } catch (caught) {
       setAutostartState("error");
       setAutostartError(describeAutostartError(caught));
@@ -52,6 +52,7 @@ function Settings() {
       setKeyInput("");
       setSaveState("idle");
       setError(null);
+      setAutostartState("loading");
       void hasApiKey().then(setAlreadyConfigured);
       void refreshAutostart();
     });
