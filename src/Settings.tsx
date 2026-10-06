@@ -12,8 +12,12 @@ type AutostartState = "loading" | "idle" | "saving" | "error";
 const describeError = (error: unknown): string =>
   error instanceof Error ? error.message : "Failed to save the key.";
 
-const describeAutostartError = (error: unknown): string =>
-  error instanceof Error ? error.message : "Failed to update the startup setting.";
+// Plugin commands reject with the Rust error as a plain string, not an Error.
+const describeAutostartError = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string" && error.length > 0) return error;
+  return "Failed to update the startup setting.";
+};
 
 /** Settings window: API key plus optional launch-on-startup behavior. */
 function Settings() {
@@ -25,31 +29,28 @@ function Settings() {
   const [autostartState, setAutostartState] = useState<AutostartState>("loading");
   const [autostartError, setAutostartError] = useState<string | null>(null);
 
-  const refreshAutostart = useCallback(async () => {
-    try {
-      const enabled = await isEnabled();
-      setStartOnStartup(enabled);
-      setAutostartState("idle");
-      setAutostartError(null);
-    } catch (caught) {
-      setAutostartState("error");
-      setAutostartError(describeAutostartError(caught));
-    }
-  }, []);
+  // State is only set from promise callbacks, never synchronously, so this is
+  // safe to call from a mount effect (oxlint `react(set-state-in-effect)`).
+  const refreshAutostart = useCallback(
+    () =>
+      isEnabled().then(
+        (enabled) => {
+          setStartOnStartup(enabled);
+          setAutostartState("idle");
+          setAutostartError(null);
+        },
+        (caught: unknown) => {
+          setAutostartState("error");
+          setAutostartError(describeAutostartError(caught));
+        },
+      ),
+    [],
+  );
 
   useEffect(() => {
     void hasApiKey().then(setAlreadyConfigured);
-    void isEnabled()
-      .then((enabled) => {
-        setStartOnStartup(enabled);
-        setAutostartState("idle");
-        setAutostartError(null);
-      })
-      .catch((caught) => {
-        setAutostartState("error");
-        setAutostartError(describeAutostartError(caught));
-      });
-  }, []);
+    void refreshAutostart();
+  }, [refreshAutostart]);
 
   // The window is preloaded once and reused (hidden, not destroyed) rather
   // than rebuilt on every open — see `settings_window.rs::preload` — so its

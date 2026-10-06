@@ -1,9 +1,9 @@
 //! The Settings window: a frameless window, styled like the overlay, for
-//! configuring the user's API key and desktop startup behavior. Deliberately
-//! not the overlay
-//! window itself — that one is a small always-on-top popup, unsuitable for a
-//! form the user needs to find again later — but it shares the same
-//! frameless card look so the two windows read as one app.
+//! configuring the user's API key and launch-on-startup behavior.
+//! Deliberately not the overlay window itself — that one is a small
+//! always-on-top popup, unsuitable for a form the user needs to find again
+//! later — but it shares the same frameless card look so the two windows read
+//! as one app.
 
 use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
 
